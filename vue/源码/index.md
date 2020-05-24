@@ -401,3 +401,166 @@ let has: { [key: number]: ?true } = {}
 
 `flushing`是一个执行更新的标志位, `false`的情况下把watcher放入队列中, `true`的情况下表示正在执行更新.
 `waiting`是一个控制`flushSchedulerQueue`只执行一次
+
+
+## 编译
+
+在编译部分中，调用关系的流转如下所示：
+
+```flow
+st=>start: createCompilerCreator
+e=>end: 编译结束
+
+op1=>operation: createCompiler
+op2=>operation: { compile, compileToFunctions }
+op3=>operation: $mount里调用compileToFunctions
+op4=>operation: 得到render、staticRenderFns函数
+
+st->op1->op2->op3->op4->e
+```
+
+### 源码分析
+
+我们从后面的流程开始分析，在`src/compiler/to-function.js`文件中的`createCompileToFunctionFn`，这个函数开头部分如下：
+
+```javascript
+const cache = Object.create(null)
+```
+
+最终返回一个函数`compileToFunctions`。调用就这个返回的函数的结果就是返回最终的编译结果的。
+
+```javascript
+...
+return (cache[key] = res)
+```
+
+由上可知，cache是一个缓存对象，用来减少编译的运算，增强性能。接下来在看`compileToFunctions`里面的代码。
+
+这段是关于CSP的，略微了解下
+```javascript
+compileToFunctions (
+    template: string,
+    options?: CompilerOptions,
+    vm?: Component
+): CompiledFunctionResult {
+  options = extend({}, options) // 这个的extend是浅复制
+  const warn = options.warn || baseWarn
+  delete options.warn
+  if (process.env.NODE_ENV !== 'production') {
+      // 检测CSP
+      try {
+        new Function('return 1')
+      } catch (e) {
+        if (e.toString().match(/unsafe-eval|CSP/)) {
+          warn(
+            // 检测内容安全策略, 如果是在严格的策略下,建议有两个:1. 放宽你的安全策略 2. 预编译
+            ....一段洋文大意是关于检测内容安全策略, 如果是检测到是严格的策略下,建议有两个:1. 放宽你的安全策略 2. 预编译
+          )
+        }
+      }
+    }
+}
+```
+
+缓存检测
+```javascript
+  const key = options.delimiters
+    ? String(options.delimiters) + template
+    : template // 得到缓存的key值
+  if (cache[key]) { // 如果缓存命中则返回缓存中的结果
+    return cache[key]
+  }
+```
+
+进行对模板（template）的编译过程
+
+```javascript
+// 核心代码，编译模板，得到编译的结果，其中有编译函数的字符串
+const compiled = compile(template, options)
+
+// 在开发环境中，检测编译过程中的错误和提示
+if (process.env.NODE_ENV !== 'production') {
+  // 输出错误提示
+  ....
+}
+```
+
+下面就是把上一步`compile(template, options)`得到的编译结果，转换成真正的编译函数。同时也是最后要返回的结果
+
+```javascript
+// 代码转换成render函数
+const res = {}
+const fnGenErrors = []
+res.render = createFunction(compiled.render, fnGenErrors)
+res.staticRenderFns = compiled.staticRenderFns.map(code => {
+  return createFunction(code, fnGenErrors)
+})
+// 把函数字符串转换成真正的函数
+function createFunction (code, errors) {
+  try {
+    return new Function(code)
+  } catch (err) {
+    errors.push({ err, code })
+    return noop
+  }
+}
+... 检测生成函数过程中的错误，并输出
+```
+
+通过以上分析`compileToFunctions`函数，我们可以以下大致流程:
+
+```flow
+st=>start: createCompilerCreator
+e=>end: 结束
+
+op1=>operation: 检测编译结果缓存
+op2=>operation: 调用compile(template, options)
+op3=>operation: 编译函数字符串
+op4=>operation: 转换成真正的函数
+op4=>operation: 存入缓存对象中
+
+st->op1->op2->op3->op4->e
+```
+
+总结，关于`createCompileToFunctionFn`部分就分析完成了。可以发现这部分的核心是在`compile`函数中。下面我们就来看看这部到底干了什么。
+
+通过追溯代码发现，`compile`函数在`src/compiler/create-compiler.js`文件中
+
+```javascript
+function compile (
+    template: string,
+    options?: CompilerOptions
+): CompiledResult {
+  const finalOptions = Object.create(baseOptions)
+  ...把options和finalOptions合并
+  const compiled = baseCompile(template.trim(), finalOptions)
+  ...
+  return compiled
+}
+```
+
+
+
+也就是说`compile`这个函数并不是重点，只是把`baseCompile`经过了一个包装。核心在`baseCompile`这个函数里面。再跟一下代码我们发现在`src/compiler/index.js`文件里有`baseCompile`的一个具体实现。
+
+```javascript
+createCompiler = createCompilerCreator(function baseCompile (
+  template: string,
+  options: CompilerOptions
+): CompiledResult {
+  const ast = parse(template.trim(), options) // 解析把HTML字符串转换成AST
+  if (options.optimize !== false) {
+    optimize(ast, options) // 优化
+  }
+  const code = generate(ast, options) //生成render函数代码字符串
+  return {
+    ast,
+    render: code.render,
+    staticRenderFns: code.staticRenderFns
+  }
+})
+```
+
+这里就是编译部分最核心的内容了，通过分析我们可以看到编译部分又分为三个步骤。
+1. 解析parse，把传入的template模板解析成AST抽象语法树
+2. 优化，主要是针对上一步生成的AST，探测子树中是否有可以作为静态的部分。如果发现这样的子树有两种办法:一是不再对这样的节点进行重新渲染，二是在patching过程中，完全跳过他们
