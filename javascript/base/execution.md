@@ -1,4 +1,37 @@
 
+# 一篇javascript解析和执行的文章
+
+这篇文章主要想讲一下关于javascript执行与解析的几个概念。其中有作用域、执行上下文（栈）、激活对象（VO和AO）等等。放在一起说是因为我觉得这几个概念其实是相互之间有很大关系的。在这个过程中参考了很多大神的文章。
+
+# 目录
+
+1. 词法作用域
+2. 提升
+3. 执行上下文（栈）
+4. 变量对象
+5. 作用域链
+6. this
+
+# 词法作用域
+
+这部分是对于后面知识的前置知识。正常的作用域分两类：一种是被大多数语言使用的词法作用域，我们将会详细说明；另一种是动态作用域，bash等语言就是使用的动态作用域。引用《你不知道的javascript》，简单地说，词法作用域就是定义在词法阶段的作用域。换句话说，词法作用域是由你在写代码时将**变量**和**块作用域**写在哪里来决定的，因此当词法分析器处理代码时会保持作用域不变(大部分情况下是这样的)。而在ES5中，块级作用域主要是由函数来决定的。所以大部分情况下，函数声明在哪里，它的作用域就是哪里。
+
+```javascript
+function foo(a) {
+   var b = a * 2;
+   function bar(c) {
+      console.log( a, b, c );
+   }
+   bar( b * 3 )
+}
+foo( 2 ); // 2, 4, 12
+```
+以上代码的词法作用域如下：
+![20200612160615](http://oss.ipanda.site/markdown/20200612160615.png)
+
+> 欺骗词法是指的在运行时修改词法的作用域。有两种办法eval和with。但是这样的做法会导致性能下降。因为不管是eval还是with，引擎无法在编译时对作用域查找进行优化。
+
+# 执行上下文(栈)
 
 # 执行上下文(栈) vs 作用域 vs 作用域链 vs 变量对象
 
@@ -85,11 +118,8 @@
 bar实际上是一个函数变量, 我们变量在创建阶段初始化时的值为undefined.
 
 
-# 闭包
-
-
-
 # 参考
 
 1. [JavaScript 深入系列、JavaScript 专题系列、ES6 系列](https://github.com/mqyqingfeng/Blog)
 2. [[翻译]JS的执行上下文和堆栈详解(What is the Execution Context & Stack in JavaScript?)](https://pjf.name/blogs/what-is-execution-context-and-stack-in-javascript.html)
+3. 《你不知道的javascript（上卷）》
