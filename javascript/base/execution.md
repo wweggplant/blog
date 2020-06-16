@@ -1,16 +1,14 @@
 
-# 一篇javascript解析和执行的文章
+# javascript执行相关知识整合
 
 这篇文章主要想讲一下关于javascript执行与解析的几个概念。其中有作用域、执行上下文（栈）、激活对象（VO和AO）等等。放在一起说是因为我觉得这几个概念其实是相互之间有很大关系的。在这个过程中参考了很多大神的文章。
 
 # 目录
 
 1. 作用域
-2. 提升
-3. 执行上下文（栈）
-4. 变量对象
-5. 作用域链
-6. this
+2. 执行上下文（栈）、变量对象和提升
+3. 作用域链
+4. this
 
 # 作用域
 
@@ -133,125 +131,164 @@ console.log( err ); // ReferenceError: err not found
 
 从上面我们可以看到，有很多编程语言遵循词法作用域，词法作用域更加偏向一种理念。而对于javascript，函数作用域可以看做是对于词法作用域的一种体现。
 
-# 提升
 
-```javascript
-console.log( a ); // undefined
-var a = 2;
-```
+# 执行上下文(栈)、变量对象和提升
 
-考虑以上代码，有人可能认为会报错，但是实际上会输出`undefined`。这里就发生了提升。这里涉及到一些js引擎方面的知识。引擎在解释代码之前，首先会对代码进行编译，在这个阶段里，就会找到所有声明，并用合适的作用域把他们关联起来。因此，所有声明的变量和函数都会被优先处理。
+   感觉执行上下文和执行上下文堆栈阅读起来多有不便，决定使用相应的英文简称替代。执行上下文：EC（Execution Context），执行上下文：ECS（Execution Context Stack）
 
-上面的代码在引擎眼里是下面的形式：
-```javascript
-var a;
-console.log(a)
-a = 2;
-```
+## 执行上下文（EC）
 
-需要注意的是，只有声明被提升了，其他的代码还是留在原来的位置等待执行。函数与普通的变量声明又有一些不同，来看下面的例子。
-
-```javascript
-foo();
-function foo() {
-   var a;
-   console.log( a ); // undefined
-   a = 2;
-}
-```
-相当于以下代码
-```javascript
-function foo() {
-   // 注意在函数内部的也进行的提升
-   var a;
-   console.log( a ); // undefined
-   a = 2;
-}
-foo();
-```
-
-如果使用函数表达式的形式，会报`foo is not a function`
-
-```javascript
-foo(); // 不是 ReferenceError, 而是 TypeError!
-bar(); // ReferenceError
-var foo = function bar() {
-   // ...
-};
-```
-
-可以发现，使用表达式的函数声明，即便是具名的，也无法在赋值之前使用，也就是说，这个时候的和普通的变量声明没有区别。
-
-## 小结
-
-提升是js引擎在编译阶段会先把定义形式函数和声明的变量找出来，就好像他们被移动到了作用域开头的位置。
-提升分为函数和变量声明两种。在js中，使用定义形式的函数是一等公民，引擎在编译阶段会优先把他们找出来，相当于放在的开头的位置。除了后定义的函数可以覆盖先定义的函数，他就能覆盖其他同名变量。
-但是那些使用变量形式表达的函数的低位就没那么高了，就相当于公主下嫁，即便她还有公主的名分（具名函数），那也和普通变量没什么区别了。
-
-
-
-# 执行上下文(栈) vs 作用域 vs 作用域链 vs 变量对象
-
-执行上下文与执行上下文堆栈
-
-**执行上下文就是代码执行的环境**
-
+EC是指的代码执行的环境，它的计算是按照下面的顺序进行的：
 1. 全局作用域代码(Global code) - 你代码第一次被执行时的默认环境
 2. 函数作用域代码(Function code) - 当执行到一个函数体内时
 3. Eval作用域代码(Eval code) - 在eval函数内部执行中.
 
-![20200611155230](http://oss.ipanda.site/markdown/20200611155230.png)
+![20200616112324](http://oss.ipanda.site/markdown/20200616112324.png)
+
+上图中，紫色的框是全局作用域`global context`，其他颜色的框是函数作用域`function context`。在应用中，只有一个全局作用域`global context`可以访问其他作用域。每当调用一个函数，就会创建一个新的函数作用域`function context`，这些`function context`会创建一篇私有的范围`scope`，在这个`scope`中声明（变量和函数）不能被外面的`scope`访问到，但是内部的`scope`可以访问外边的`scope`。
 
 
-执行上下文堆栈
+## 执行上下文堆栈（ECS）
 
-执行上下文的5个关键点:
+   有没有想过引擎是如何实现以上所说的内容呢？接下来就涉及到ECS。在我看来，执行上下文偏向概念，定义了js执行环境的。而ECS则更加具体。
+
+众所周知，浏览器是单线程的，也就是说在同一时间，只能做一件事，其他的事情（比如event loop）都以队列的形式放在了ECS中。
+
+![20200616140631](http://oss.ipanda.site/markdown/20200616140631.png)
+
+浏览器载入script脚本后，首先默认进入全局作用域中。如果在全局作用域中调用了函数，按照执行顺序进入被调用的函数中，在ECS中，压入一个新创建EC。如果你在当前调用的函数中，又调用了其他的函数，后续的过程与之类似。新创建的EC会被压入ECS顶部。引擎总是会执行ECS当前顶部的EC，一旦当前EC完毕，ECS就会把它从栈顶推出，之后ECS把当前栈顶的EC（也就是之前栈顶下面的EC）的控制权返回给引擎。具体可以参见下面的例子。
+
+```javascript
+(function foo(i) {
+    if (i === 3) {
+        return;
+    }
+    else {
+        foo(++i);
+    }
+}(0));
+```
+
+![es1](http://oss.ipanda.site/markdown/es1.gif)
+
+这里我参考其他文章，总结的执行上下文的5个关键点:
 
 1. 单线程
-2. 同步执行
+2. 同步执行（这个同步的意思不太懂）
 3. 一个全局上下文
 4. 无限个函数上下文
 5. 每次调用一个函数都会新建一个新的执行上下文, 哪怕是调用它自身
 
-调用一个执行上下文(Execution context)都会分为两个阶段.
 
-1. 创建阶段.[当一个函数被调用,但是在执行任何内部代码之前]
+## 执行EC的细节
+
+调用一个EC都会分为两个阶段.
+
+1. 创建阶段.[当一个函数被调用,但是并未执行任何代码的时候]
    1. 创建一个作用域链(Scope chain)
-   2. 创建变量,函数和函数的调用参数.
+   2. 创建变量,函数和函数的调用参数（arguments）.
    3. 确定this的值
 2. 激活/代码执行阶段:
-   1. 变量赋值, 函数引用以及代码块的执行.
+   1. 变量赋值, 确定函数引用以及解释/执行代码块.
 
-![全局的执行环境始终在底部.](http://oss.ipanda.site/markdown/20200611155505.png)
+代码化以上步骤最后的结果可以抽象成以下的这个对象，而这个结果就是我们接下来要讲的激活对象/变量对象了。
 
-激活 / 变量对象[AO/VO]
+```javascript
+executionContextObj = {
+    'scopeChain': { /* 当前的执行环境variableObject,以及所有父级执行环境的variableObject的引用 */ },
+    'variableObject': { /* 函数形参, 内部变量和函数声明*/ },
+    'this': {}
+}
+```
 
-1. 找到调用这个函数的所有代码
+
+## 激活对象和变量对象[AO/VO]
+
+上文提到的`executionContextObj`的创建的时机是在函数被调用后，真正执行之前，也就是在`执行EC的细节`这节中提到的创建阶段。在这个阶段里，解释器会先扫描当前函数代码中的参数（形参和实参），声明的函数与变量，然后根据扫描的结果创建`executionContextObj`里的`variableObject`。
+
+具体来说就是以下的伪过程：
+1. 找到待执行函数的代码
 2. 在执行函数之前, 创建执行上下文(execution context)
 3. 进入创建阶段:
    1. 初始化作用域链(scope chain)
-   2. 创建变量对象
-      1.  创建参数对象,检查参数的上下文,初始化其名称和值并创建一个副本.
+   2. 创建变量对象（VO）
+      1. 创建实际参数对象，检查参数的上下文，初始化其名称和值并创建一个引用副本.
       2. 扫描上下文中所有的函数声明
          1. 每个函数被找到的时候, 在variable object中创建一个对应函数名称的属性, 其值是一内存中指向该函数的指针引用.
-         2. 如果这个函数已经存在,该指针引用会被覆盖.
+         2. 如果这个函数已经存在，该指针引用会被覆盖.
       3.  扫描上下文中所有对象的声明
-          1.  当一个变量被找到的时候, 在variable object中创建其对应变量名的属性, 并将其值初始化为undefined
+          1. 当一个变量被找到的时候, 在variable object中创建其对应变量名的属性, 并将其值初始化为undefined
           2. 如果这个变量名的key已经存在于variable object中时, 跳过本次扫描.
    3. 确定this在上下文中的值
 4. 激活/代码执行阶段
    1. 解释器逐行执行函数内的代码, 变量也在此时被赋值.
 
-变量提升
+看一个具体的例子：
+
+```javascript
+function foo(i) {
+    var a = 'hello';
+    var b = function privateB() {
+
+    };
+    function c() {
+
+    }
+}
+foo(22);
+```
+
+在执行到`foo(22)`的时候，创建阶段的结果如下：
+
+```javascript
+fooExecutionContext = {
+    scopeChain: { ... },
+    variableObject: {
+        arguments: { // 实际参数
+            0: 22,
+            length: 1
+        },
+        i: 22,  // 形参,注意这里有赋值
+        c: pointer to function c() // 函数声明，指向c函数的引用
+        a: undefined,  // 声明变量初始化为undefined
+        b: undefined
+    },
+    this: { ... }
+}
+```
+
+可以看到，在创建阶段，只是把内部的声明与VO中的属性名对应起来，除了参数外，没有赋值操作。创建阶段完成后，接下来程序开始执行代码，进入执行阶段。在这里VO转变成了激活对象（AO）。在这个阶段安顺序执行代码，并进行赋值操作。
+
+```javascript
+fooExecutionContext = {
+    scopeChain: { ... },
+    variableObject: {
+        arguments: {
+            0: 22,
+            length: 1
+        },
+        i: 22,
+        c: pointer to function c()
+        a: 'hello',
+        b: pointer to function privateB()
+    },
+    this: { ... }
+}
+```
+
+## 提升
+
+通过前面的分析我们就明白了，为什么js会发生提升。原因就在与，在创建函数执行之前的创建阶段里，解释器会扫描代码，把声明的函数的变量先放在VO中。所以即便是先写了访问这些声明的代码，最终的记过也是可以正常执行的。这就是所说的提升，就好像这些声明代码被移动到了代码的最开始的位置。
 
 ```javascript
 (function() {
 
     console.log(typeof foo); // 函数指针
     console.log(typeof bar); // 未定义
+    console.log(typeof aoo); // 未定义
 
     var foo = 'hello',
-        bar = function() {
+        bar = function aoo() {
             return 'world';
         };
 
@@ -268,15 +305,40 @@ var foo = function bar() {
 
 2. foo被定义了两次, 为什么foo被当作是函数而不是undefined或者是字符串呢?
 
-尽管foo被定义了两次, 我们直到在创建阶段(creation stage)中,函数先于变量创建, 如果其属性名存在的话, 接下来的声明会被跳过.
-因此, 函数foo的引用在创建阶段的时候先被创建, 解释器接下来发现了变量foo, 但是由于已经存在了foo的名称,因此什么都没有发生和执行.
+尽管foo被定义了两次, 我们直到在创建阶段(creation stage)中，函数先于变量创建，如果其属性名存在的话, 接下来的声明会被跳过。因此, 函数foo的引用在创建阶段的时候先被创建, 解释器接下来发现了变量foo, 但是由于已经存在了foo的名称，因此什么都没有发生和执行。需要注意的是，即便给`bar`赋值的函数是一个具名函数`aoo`，`aoo`也没有发生提升。
+
 3. 为什么bar是undefined?
 
 bar实际上是一个函数变量, 我们变量在创建阶段初始化时的值为undefined.
+
+### 条件语句中的函数声明
+
+需要注意的是，现在很多浏览器是支持条件语句的函数声明的，如下代码，在以前的浏览器中运行的话，会输出`else`
+
+```javascript
+foo()
+if(true) {
+   function foo() {
+      console.log('if')
+   }
+} else {
+   function foo() {
+      console.log('else')
+   }
+}
+// 以前会输出: else
+```
+
+   具体参见 [MDN function](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Statements/function)
+
+## 小结
+
+从提升这部分可以看出来，在js中，函数声明是一等公民，引擎在编译阶段会优先把他们找出来，并绑定在VO/AO中。除非后面同名的声明函数，否则一般变量声明还不能覆盖他，但是他是可以覆盖其他同名变量声明。一旦采用函数表达式，那么他的低位就没那么高了，就相当于公主下嫁，即便她有公主的名分（具名函数），那也和普通变量声明没有区别了。
+
 
 
 # 参考
 
 1. [JavaScript 深入系列、JavaScript 专题系列、ES6 系列](https://github.com/mqyqingfeng/Blog)
-2. [[翻译]JS的执行上下文和堆栈详解(What is the Execution Context & Stack in JavaScript?)](https://pjf.name/blogs/what-is-execution-context-and-stack-in-javascript.html)
+2. [What is the Execution Context & Stack in JavaScript?](http://davidshariff.com/blog/what-is-the-execution-context-in-javascript/)
 3. 《你不知道的javascript（上卷）》
