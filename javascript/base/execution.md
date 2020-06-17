@@ -134,7 +134,7 @@ console.log( err ); // ReferenceError: err not found
 
 # 执行上下文(栈)、变量对象和提升
 
-   感觉执行上下文和执行上下文堆栈阅读起来多有不便，决定使用相应的英文简称替代。执行上下文：EC（Execution Context），执行上下文：ECS（Execution Context Stack）
+   感觉执行上下文和执行上下文堆栈阅读起来多有不便，决定使用相应的英文简称替代。执行上下文：EC（Execution Context），执行上下文：ECStack（Execution Context Stack）
 
 ## 执行上下文（EC）
 
@@ -148,15 +148,15 @@ EC是指的代码执行的环境，它的计算是按照下面的顺序进行的
 上图中，紫色的框是全局作用域`global context`，其他颜色的框是函数作用域`function context`。在应用中，只有一个全局作用域`global context`可以访问其他作用域。每当调用一个函数，就会创建一个新的函数作用域`function context`，这些`function context`会创建一篇私有的范围`scope`，在这个`scope`中声明（变量和函数）不能被外面的`scope`访问到，但是内部的`scope`可以访问外边的`scope`。
 
 
-## 执行上下文堆栈（ECS）
+## 执行上下文堆栈（ECStack）
 
-   有没有想过引擎是如何实现以上所说的内容呢？接下来就涉及到ECS。在我看来，执行上下文偏向概念，定义了js执行环境的。而ECS则更加具体。
+   有没有想过引擎是如何实现以上所说的内容呢？接下来就涉及到ECStack。在我看来，执行上下文偏向概念，定义了js执行环境的。而ECStack则更加具体。
 
-众所周知，浏览器是单线程的，也就是说在同一时间，只能做一件事，其他的事情（比如event loop）都以队列的形式放在了ECS中。
+众所周知，浏览器是单线程的，也就是说在同一时间，只能做一件事，其他的事情（比如event loop）都以队列的形式放在了ECStack中。
 
 ![20200616140631](http://oss.ipanda.site/markdown/20200616140631.png)
 
-浏览器载入script脚本后，首先默认进入全局作用域中。如果在全局作用域中调用了函数，按照执行顺序进入被调用的函数中，在ECS中，压入一个新创建EC。如果你在当前调用的函数中，又调用了其他的函数，后续的过程与之类似。新创建的EC会被压入ECS顶部。引擎总是会执行ECS当前顶部的EC，一旦当前EC完毕，ECS就会把它从栈顶推出，之后ECS把当前栈顶的EC（也就是之前栈顶下面的EC）的控制权返回给引擎。具体可以参见下面的例子。
+浏览器载入script脚本后，首先默认进入全局作用域中。如果在全局作用域中调用了函数，按照执行顺序进入被调用的函数中，在ECStack中，压入一个新创建EC。如果你在当前调用的函数中，又调用了其他的函数，后续的过程与之类似。新创建的EC会被压入ECStack顶部。引擎总是会执行ECStack当前顶部的EC，一旦当前EC完毕，ECStack就会把它从栈顶推出，之后ECStack把当前栈顶的EC（也就是之前栈顶下面的EC）的控制权返回给引擎。具体可以参见下面的例子。
 
 ```javascript
 (function foo(i) {
@@ -174,7 +174,7 @@ EC是指的代码执行的环境，它的计算是按照下面的顺序进行的
 这里我参考其他文章，总结的执行上下文的5个关键点:
 
 1. 单线程
-2. 同步执行（这个同步的意思不太懂）
+2. 代码顺序执行
 3. 一个全局上下文
 4. 无限个函数上下文
 5. 每次调用一个函数都会新建一个新的执行上下文, 哪怕是调用它自身
@@ -335,10 +335,103 @@ if(true) {
 
 从提升这部分可以看出来，在js中，函数声明是一等公民，引擎在编译阶段会优先把他们找出来，并绑定在VO/AO中。除非后面同名的声明函数，否则一般变量声明还不能覆盖他，但是他是可以覆盖其他同名变量声明。一旦采用函数表达式，那么他的低位就没那么高了，就相当于公主下嫁，即便她有公主的名分（具名函数），那也和普通变量声明没有区别了。
 
+# 作用域链
+
+在前两节里，我们讲解了js中执行上下文和执行上下文堆栈，其中涉及到作用域链（`scope chain`）。作用域链的用途是保证对执行环境有权访问的**所有变量和函数**的**有序**访问，注意这里关键词变量和有序。变量说的其实就是之前小节里讲的变量/激活对象（VO/AO），有序指的是按照执行上下文堆栈的入栈顺序。关于作用域，这里就不做太多的解释，在《javascript高级编程》这本书中有比较清晰的说明。在这里我们重点说一下，引擎在这个阶段是如果工作的。由于在《javascript高程》和《你不知道的javascript》中，并没有找到关于作用域链是如何工作有比较详细的解析，下面的内容是我个人搜寻的外文网站资料汇总而成。
+
+
+需要明确的概念
+
+函数对象（function object）：根据ECMAScript的描述，函数是一个对象，它是在函数声明变量实例化、函数表达式求值或者调用函数构建函数（比如：new Person()）时创建的，函数对象创建后，总是把当前执行环境上下文的作用域链赋值给属性`[[scope]]`。根据上面执行环境上下文（堆栈）的学习，简单总结就是一个函数的写在哪里，那里的作用域链就赋值给函数的`[[scope]]`属性。
+
+> 构造函数的`[[scope]]`指向一个只包含全局对象的作用域链
+
+回到创建VO的阶段，
+让我们在回到之前的例子中：
+
+```javascript
+function foo(i) {
+    var a = 'hello';
+    function c() {
+    }
+}
+foo(22);
+```
+
+首先，创建函数函数对象`foo`，因为是在全局环境里创建的，所以吧全局的VO压入作用域链中
+
+```javascript
+foo.[[scope]] = [
+  globalContext.VO
+];
+```
+
+接下来，执行`foo`中代码，创建作用域链，该作用域链是把当前上下文的作用域链和当前的AO/VO组合起来。
+
+```javascript
+fooontextObj = {
+    scopeChain: [AO/VO].concat(foo.[[scope]])
+    AO/VO: { }, // 
+    this: {}
+}
+```
+
+这个时候已经创建好了`foo`的上下文，继续执行`foo`的后续代码，创建函数对象`c`，它的`[[scope]]`是当前上下文的作用域链，如下：
+
+```javascript
+c.[[scope]] = fooContextObj.scopeChain;  // [fooContextObj.AO, globalContext.VO]
+```
+
+作用域链就是按照上面的步骤，逐步形成的，可以看到，每个函数都有自己作用域链。一个函数在定义的时候会创建一个作用域链，并赋值给自身的`[[scope]]`。在函数执行的时候，又会在执行上下文中创建一个作用域链，这个作用域是`[[scope]]`与当前执行的上下文的AO/VO组合在一起形成的新链。
+
+
+# this
+
+我们最开始就降到了，javascript是采用的是词法作用域。可是在调用的过程中，又让人感觉像是动态作用域。这其中多半是`this`在作怪。
+
+## 对this的误解
+
+```javascript
+function foo(num) {
+   console.log( "foo: " + num );
+   // 记录 foo 被调用的次数
+   this.count++;
+}
+foo.count = 0;
+var i;
+for (i=0; i<10; i++) {
+   if (i > 5) {
+      foo( i );
+   }
+}
+console.log( foo.count );
+```
+
+以上代码输出的结果是0，是否超出你的预期呢？这里由于`foo`中有`this.count++`，会认为`foo.count`执行完循环后的值是5。这里是认为`this`会指向自身`foo`函数。
+
+还有一种情况如下：
+
+```javascript
+function foo() {
+   var a = 2;
+   this.bar();
+}
+function bar() {
+   console.log( this.a );
+}
+foo(); // ReferenceError: a is not defined
+```
+
+这里使用`this.a`，是想访问`foo`函数的里的变量`a`，这里是把`this`和词法作用域混淆了，这样是不可以的。而且要注意的是，`this.bar();`这句能调用也是意外，正好全局上有一个`bar`函数。
+
+## this到底是什么
+
+从很多查找到的资料上，都会告诉我们`this`是一个运行时绑定的，并不是编写绑定的。词法作用域是编写时，作用域就决定好了。`this`的绑定取决于函数的调用方式
 
 
 # 参考
 
 1. [JavaScript 深入系列、JavaScript 专题系列、ES6 系列](https://github.com/mqyqingfeng/Blog)
 2. [What is the Execution Context & Stack in JavaScript?](http://davidshariff.com/blog/what-is-the-execution-context-in-javascript/)
-3. 《你不知道的javascript（上卷）》
+3. [Javascript Closures#Identifier Resolution, Execution Contexts and Scope Chains](http://jibbering.com/faq/faq_notes/closures.html#clIRExSc)
+4. 《你不知道的javascript（上卷）》
