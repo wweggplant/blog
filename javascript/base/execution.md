@@ -426,8 +426,97 @@ foo(); // ReferenceError: a is not defined
 
 ## this到底是什么
 
-从很多查找到的资料上，都会告诉我们`this`是一个运行时绑定的，并不是编写绑定的。词法作用域是编写时，作用域就决定好了。`this`的绑定取决于函数的调用方式
+从很多查找到的资料上，显示告诉我们`this`是在运行时绑定的，并不是在编写时绑定的。词法作用域是编写时，作用域就决定好了。this的绑定具体要看谁真正的调用了函数。
 
+## this绑定的四条规则
+
+1. 默认绑定，是指没有使用其他绑定方式时采用的绑定方式，最常见于独立函数调用，this绑定为全局对象
+
+```javascript
+function foo() {
+   console.log( this.a );
+}
+var a = 2; foo(); // 2
+```
+
+> 注意在严格模式的情况下，不能将全局对象用于默认绑定。
+
+```javascript
+function foo() {
+   "use strict";
+   console.log( this.a );
+}
+var a = 2;
+foo(); // TypeError: this is undefined
+```
+
+默认绑定是省略了调用的对象，`foo()`其实是`window.foo()`，所以`this`是指向全局对象的。
+
+2. 隐式绑定
+
+```javascript
+var a = 'b'
+var obj = {
+   foo: foo,
+   a: 'a'
+}
+function foo(){
+   console.log(this.a)
+}
+obj.foo() // a
+```
+
+这个例子中，因为最后是`obj`调用的`foo`函数，`this`就绑定在`obj`对象上。再看下面这个改动过后的例子。
+
+```javascript
+var a = 'b'
+var obj = {
+   foo: foo,
+   a: 'a'
+}
+function foo(){
+   console.log(this.a)
+}
+var bar = obj.foo
+bar() // b
+```
+
+从上面的例子可以看出，虽然`bar`指向了`obj.foo`属性，但是最后调用还是在全局环境里，`this`指向的是就变成了全局对象。
+
+3. 显示绑定
+
+   1. 使用`Function`原型上提供的`call`、`apply`方法,改变this的绑定
+   2. API调用的“上下文”，比如数组的`forEach`方法的第二个参数
+
+```javascript
+function foo(el) {
+   console.log( el, this.id );
+}
+var obj = {
+   id: "awesome"
+};
+// 调用 foo(..) 时把 this 绑定到 obj [1, 2, 3].forEach( foo, obj );
+```
+
+4. new绑定
+
+javascript与其他语言对于`new`的理解是不一样的。其他语言`new`一个类，往往意味这实例化一个该类的对象。但是在javascript中，这表示调用该函数的构造调用。
+
+`new`调用函数，会自动发生以下操作：
+   1. 创建(或者说构造)一个全新的对象。
+   2. 这个新对象会被执行[[Prototype]]连接。
+   3. 这个新对象会绑定到函数调用的this。
+   4. 如果函数没有返回其他对象，那么new表达式中的函数调用会自动返回这个新对象。
+
+```javascript
+function foo(a) {
+   this.a = a;
+}
+var bar = new foo(2); console.log( bar.a ); // 2
+```
+使用`new`来调用 foo(..) 时，我们会构造一个新对象并把它绑定到 foo(..) 调用中的 this 上。new 是最后一种可以影响函数调用时 this 绑定行为的方法，我们称之为 new 绑定。
+
+   在ES6中提供了箭头函数，this指向是是函数定义的上下文。
 
 # 参考
 
