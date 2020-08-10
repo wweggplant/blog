@@ -36,7 +36,7 @@ Object.assign({}, obj)
 ```javascript
 function extend() {
     var deep = false;
-    var lenght = arguments.length
+    var length = arguments.length
     var name, src, copy, i = 1, options, clone, copyIsArray
     var target = arguments[0] || {};
     if (typeof arguments[0] === 'boolean') {
