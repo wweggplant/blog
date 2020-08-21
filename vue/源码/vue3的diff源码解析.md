@@ -47,7 +47,7 @@ switch (type) {
 
 ## element类型
 
-测试代码
+情况1, 新的根节点, 测试代码如下
 
 ```javascript
 const root = nodeOps.createElement('div')
@@ -69,9 +69,81 @@ if (n1 == null) {
 
 2. 判断vnode.el是否为空，非空说明是这个静态节点正在被`reused`。只需要克隆这个el即可？
 
-2. 在`mountElement`方法中，就把n2挂载到`container`节点下面
+3. 在`mountElement`方法中，就把n2挂载到`container`节点下面
 
 ```javascript
 hostInsert(el, container, anchor)
 ```
 
+情况2, 两个节点类型不一样, 测试代码如下:
+
+```javascript
+it('should update an element tag which is already mounted', () => {
+  render(h('div', ['foo']), root)
+  expect(inner(root)).toBe('<div>foo</div>')
+
+  render(h('span', ['foo']), root)
+  expect(inner(root)).toBe('<span>foo</span>')
+})
+```
+
+根据上面的分析,n1和n2的节点类型是不一样的.这个时候会吧老节点n1卸载掉,然后把新节点n2挂载.下面会说一下卸载节点的方法
+
+```javascript
+const unmount: UnmountFn = (
+  vnode,
+  parentComponent,
+  parentSuspense,
+  doRemove = false
+) => {
+  const {
+    type,
+    props,
+    ref,
+    children,
+    dynamicChildren,
+    shapeFlag,
+    patchFlag,
+    dirs
+  } = vnode
+  // ref属性置null
+
+  if (shapeFlag & ShapeFlags.COMPONENT) {
+    // 卸载组件
+  } else {
+    if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+      // 卸载SUSPENSE
+      return
+    }
+
+    if (shouldInvokeDirs) {
+      // 调用指令的beforeUnmount的钩子
+      invokeDirectiveHook(vnode, null, parentComponent, 'beforeUnmount')
+    }
+
+    if (
+      dynamicChildren &&
+      (type !== Fragment ||
+        (patchFlag > 0 && patchFlag & PatchFlags.STABLE_FRAGMENT))
+    ) {
+      // 卸载Fragment组件
+    } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+      // 卸载子组件
+    }
+
+    // an unmounted teleport should always remove its children
+    if (shapeFlag & ShapeFlags.TELEPORT) {
+      // 删除TP组件
+    }
+
+    if (doRemove) {
+      // 删除节点
+      remove(vnode)
+    }
+
+  if ((vnodeHook = props && props.onVnodeUnmounted) || shouldInvokeDirs) {
+    // 有挂载onVnodeUnmounted的话执行该事件
+  }
+}
+
+```
